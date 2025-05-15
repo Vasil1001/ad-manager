@@ -1,103 +1,184 @@
-import Image from "next/image";
+"use client";
+
+import { useEffect, useState } from "react";
+import RulesTable from "../components/RulesTable";
+import RuleModal from "../components/RuleModal";
+import { AdRule } from "./api/types";
+
+interface ApiDataItem extends AdRule {
+  id: string;
+  created_time?: string;
+  account_id?: string;
+}
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [data, setData] = useState<ApiDataItem[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingRule, setEditingRule] = useState<ApiDataItem | undefined>(
+    undefined
+  );
+  const [isLoading, setIsLoading] = useState(false);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  const fetchRules = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch("/api");
+      if (!response.ok) {
+        throw new Error(`Error: ${response.statusText}`);
+      }
+      const result = await response.json();
+
+      if (result && Array.isArray(result.data)) {
+        setData(result.data);
+      } else if (Array.isArray(result)) {
+        setData(result);
+      } else {
+        console.error("Fetched data is not in the expected format:", result);
+        setData([]);
+      }
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("An unknown error occurred");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRules();
+  }, []);
+
+  const handleCreateRule = async (rule: AdRule) => {
+    try {
+      setIsLoading(true);
+      const response = await fetch("/api", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(rule),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error: ${response.statusText}`);
+      }
+
+      setModalOpen(false);
+      await fetchRules(); // Refresh the rules list
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("Failed to create rule");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEditRule = async (rule: AdRule & { id: string }) => {
+    setEditingRule(rule);
+    setModalOpen(true);
+  };
+
+  const handleUpdateRule = async (rule: AdRule) => {
+    if (!editingRule) return;
+
+    try {
+      setIsLoading(true);
+      const response = await fetch(`/api/rule/${editingRule.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(rule),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error: ${response.statusText}`);
+      }
+
+      setModalOpen(false);
+      setEditingRule(undefined);
+      await fetchRules(); // Refresh the rules list
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("Failed to update rule");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteRule = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this rule?")) return;
+
+    try {
+      setIsLoading(true);
+      const response = await fetch(`/api/rule/${id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error: ${response.statusText}`);
+      }
+
+      await fetchRules(); // Refresh the rules list
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("Failed to delete rule");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 p-6">
+      <header className="mb-8">
+        <h1 className="text-2xl font-bold text-gray-800">Automated Rules</h1>
+        <p className="text-gray-600 mt-1">Manage your Facebook ad rules</p>
+      </header>
+
+      <div className="mb-6 flex justify-between items-center">
+        <div>
+          {isLoading && <span className="text-blue-600">Loading...</span>}
+          {error && <span className="text-red-500">Error: {error}</span>}
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
+        <button
+          onClick={() => {
+            setEditingRule(undefined);
+            setModalOpen(true);
+          }}
+          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center"
         >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+          <span className="mr-2">+</span> Create Rule
+        </button>
+      </div>
+
+      {data === null && !error ? (
+        <div className="text-center py-10">Loading rules...</div>
+      ) : (
+        <RulesTable
+          rules={data || []}
+          onEdit={handleEditRule}
+          onDelete={handleDeleteRule}
+        />
+      )}
+
+      <RuleModal
+        isOpen={modalOpen}
+        onClose={() => {
+          setModalOpen(false);
+          setEditingRule(undefined);
+        }}
+        onSave={editingRule ? handleUpdateRule : handleCreateRule}
+        initialData={editingRule}
+      />
     </div>
   );
 }
